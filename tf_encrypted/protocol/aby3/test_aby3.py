@@ -895,7 +895,7 @@ def test_simple_lr_model():
   print("Elapsed time: {} seconds".format(end - start))
 
 
-def test_mul2_private_private():
+def test_mul_trunc2_private_private():
   tf.reset_default_graph()
 
   prot = ABY3()
@@ -912,15 +912,15 @@ def test_mul2_private_private():
   y = tfe.define_private_input("input-provider", provide_input)
 
   # define computation
-  z = tfe.mul2(x, y)
+  z = tfe.mul_trunc2(x, y)
 
   with tfe.Session() as sess:
     # initialize variables
     sess.run(tfe.global_variables_initializer())
     # reveal result
-    result = sess.run(z.reveal(), tag="mul2")
+    result = sess.run(z.reveal(), tag="mul_trunc2")
     close(result, np.array([[2.6, 2.6], [2.6, 2.6]]))
-    print("test_mul2_private_private succeeds")
+    print("test_mul_trunc2_private_private succeeds")
 
 
 def test_error():
@@ -1063,7 +1063,7 @@ if __name__ == "__main__":
     test_reduce_sum()
     test_concat()
     test_simple_lr_model()
-    test_mul2_private_private()
+    test_mul_trunc2_private_private()
     test_error()
 
   test_arithmetic_boolean()

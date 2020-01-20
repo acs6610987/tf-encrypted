@@ -953,9 +953,9 @@ class ABY3(Protocol):
     return self.dispatch("mul", x, y)
 
   @memoize
-  def mul2(self, x, y):
+  def mul_trunc2(self, x, y):
     x, y = self.lift(x, y)
-    return self.dispatch("mul2", x, y)
+    return self.dispatch("mul_trunc2", x, y)
 
   @memoize
   def div(self, x, y):
@@ -1934,7 +1934,13 @@ def _mul_private_private(prot, x, y):
     return z
 
 
-def _mul2_private_private(prot, x, y):
+def _mul_trunc2_private_private(prot, x, y):
+  """
+  Multiplication with the Trunc2 protocol in the ABY3 paper.
+  This is more efficient (in terms of communication rounds)
+  than `mul` in the onlline phase only when pre-computation
+  is left out of consideration.
+  """
   assert isinstance(x, ABY3PrivateTensor), type(x)
   assert isinstance(y, ABY3PrivateTensor), type(y)
 
@@ -1947,7 +1953,7 @@ def _mul2_private_private(prot, x, y):
   shape = x_shares[0][0].shape
   amount = prot.fixedpoint_config.precision_fractional
 
-  with tf.name_scope("mul2"):
+  with tf.name_scope("mul_trunc2"):
     # Step 1: Generate a Random Truncation Pair
     # If TF is smart enough, this part is supposed to be pre-computation.
     r = prot._gen_random_sharing(shape, share_type=BOOLEAN)
