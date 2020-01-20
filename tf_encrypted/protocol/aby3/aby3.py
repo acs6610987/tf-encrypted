@@ -1405,32 +1405,32 @@ class ABY3Tensor(abc.ABC):
     """
     return self.prot.reduce_max(self, axis)
 
-  def xor(self, other):
+  def bitwise_xor(self, other):
     if self.share_type == BOOLEAN:
       return self.prot.B_xor(self, other)
     else:
       raise ValueError("Unsupported share type for xor: {}".format(self.share_type))
 
   def __xor__(self, other):
-    return self.xor(other)
+    return self.bitwise_xor(other)
 
-  def and_(self, other):
+  def bitwise_and(self, other):
     if self.share_type == BOOLEAN:
       return self.prot.B_and(self, other)
     else:
       raise ValueError("unsupported share type for and: {}".format(self.share_type))
 
   def __and__(self, other):
-    return self.and_(other)
+    return self.bitwise_and(other)
 
-  def or_(self, other):
+  def bitwise_or(self, other):
     if self.share_type == BOOLEAN:
       return self.prot.B_or(self, other)
     else:
       raise ValueError("unsupported share type for and: {}".format(self.share_type))
 
   def __or__(self, other):
-    return self.or_(other)
+    return self.bitwise_or(other)
 
   def invert(self):
     if self.share_type == BOOLEAN:

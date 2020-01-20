@@ -386,27 +386,25 @@ def native_factory(NATIVE_TYPE, EXPLICIT_MODULUS=None):  # pylint: disable=inval
       return factory.tensor(self.value)
 
     def __or__(self, other):
-      return self.or_(other)
+      return self.bitwise_or(other)
 
-    def or_(self, other):
+    def bitwise_or(self, other):
       x, y = _lift(self, other)
       value = tf.bitwise.bitwise_or(x.value, y.value)
       return DenseTensor(value)
 
     def __xor__(self, other):
-      return self.xor(other)
+      return self.bitwise_xor(other)
 
-    def xor(self, other):
+    def bitwise_xor(self, other):
       x, y = _lift(self, other)
       value = tf.bitwise.bitwise_xor(x.value, y.value)
       return DenseTensor(value)
 
     def __and__(self, other):
-      return self.and_(other)
+      return self.bitwise_and(other)
 
-    def and_(self, other):
-      # Because "and" is a keyword in Python, the naming "and_" follows the way how Python handles this:
-      # https://docs.python.org/3.4/library/operator.html
+    def bitwise_and(self, other):
       x, y = _lift(self, other)
       value = tf.bitwise.bitwise_and(x.value, y.value)
       return DenseTensor(value)
@@ -419,9 +417,9 @@ def native_factory(NATIVE_TYPE, EXPLICIT_MODULUS=None):  # pylint: disable=inval
       return DenseTensor(value)
 
     def __lshift__(self, bitlength):
-      return self.lshift(bitlength)
+      return self.left_shift(bitlength)
 
-    def lshift(self, bitlength):
+    def left_shift(self, bitlength):
       return DenseTensor(tf.bitwise.left_shift(self.value, bitlength))
 
     def __rshift__(self, bitlength):
