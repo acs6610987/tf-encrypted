@@ -42,9 +42,9 @@ class LogisticRegression:
             fit_batch_op = self.backward(x, dy, self.init_learning_rate)
             return fit_batch_op
 
-    def fit(self, sess, x, y, num_batches):
+    def fit(self, sess, x, y, num_iters):
         fit_batch_op = self.fit_batch(x, y)
-        for batch in range(num_batches):
+        for batch in range(num_iters):
             sess.run(fit_batch_op, tag="fit-batch")
 
     """
