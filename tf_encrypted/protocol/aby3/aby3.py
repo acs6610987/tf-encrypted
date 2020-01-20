@@ -206,7 +206,7 @@ class ABY3(Protocol):
       with tf.device(self.servers[2].device_name):
         x_on_2 = factory.constant(value)
 
-    return ABY3Constant(self, x_on_0, x_on_1, x_on_2, apply_scaling, share_type)
+    return ABY3Constant(self, [x_on_0, x_on_1, x_on_2], apply_scaling, share_type)
 
   def define_private_variable(
       self,
@@ -422,7 +422,7 @@ class ABY3(Protocol):
           ))
       v = self._encode(v, apply_scaling)
       w = factory.tensor(v)
-      return ABY3PublicTensor(self, w, w, w, apply_scaling, share_type)
+      return ABY3PublicTensor(self, [w, w, w], apply_scaling, share_type)
 
     with tf.name_scope("public-input{}".format(suffix)):
 
@@ -462,7 +462,7 @@ class ABY3(Protocol):
     with tf.name_scope("public-tensor"):
       tensor = self._encode(tensor, apply_scaling)
       w = factory.tensor(tensor)
-      return ABY3PublicTensor(self, w, w, w, apply_scaling, share_type)
+      return ABY3PublicTensor(self, [w, w, w], apply_scaling, share_type)
 
   def define_output(
       self,
@@ -1473,29 +1473,23 @@ class ABY3PublicTensor(ABY3Tensor):
 
   dispatch_id = "public"
 
-  def __init__(self, prot: ABY3, value_on_0: AbstractTensor, value_on_1: AbstractTensor,
-               value_on_2: AbstractTensor, is_scaled: bool, share_type) -> None:
-    assert isinstance(value_on_0, AbstractTensor), type(value_on_0)
-    assert isinstance(value_on_1, AbstractTensor), type(value_on_1)
-    assert isinstance(value_on_2, AbstractTensor), type(value_on_2)
-    assert value_on_0.shape == value_on_1.shape
-    assert value_on_0.shape == value_on_2.shape
+  def __init__(self, prot: ABY3, values: List[AbstractTensor], is_scaled: bool, share_type) -> None:
+    assert all(isinstance(v, AbstractTensor) for v in values)
+    assert all((v.shape == values[0].shape) for v in values)
 
     super(ABY3PublicTensor, self).__init__(prot, is_scaled, share_type)
-    self.value_on_0 = value_on_0
-    self.value_on_1 = value_on_1
-    self.value_on_2 = value_on_2
+    self.values = values
 
   def __repr__(self) -> str:
     return "ABY3PublicTensor(shape={}, share_type={})".format(self.shape, self.share_type)
 
   @property
   def shape(self) -> List[int]:
-    return self.value_on_0.shape
+    return self.values[0].shape
 
   @property
   def backing_dtype(self):
-    return self.value_on_0.factory
+    return self.values[0].factory
 
   @property
   def unwrapped(self) -> Tuple[AbstractTensor, ...]:
@@ -1532,10 +1526,10 @@ class ABY3PublicTensor(ABY3Tensor):
     In most cases you will not need to use this method.  All funtions
     will hide this functionality for you (e.g. `add`, `mul`, etc).
     """
-    return self.value_on_0, self.value_on_1, self.value_on_2
+    return self.values
 
   def decode(self) -> Union[np.ndarray, tf.Tensor]:
-    return self.prot._decode(self.value_on_0, self.is_scaled)  # pylint: disable=protected-access
+    return self.prot._decode(self.values[0], self.is_scaled)  # pylint: disable=protected-access
 
   def to_native(self):
     return self.decode()
@@ -1547,19 +1541,14 @@ class ABY3Constant(ABY3PublicTensor):
   records the fact that the underlying value was declared as a constant.
   """
 
-  def __init__(self, prot, constant_on_0, constant_on_1, constant_on_2, is_scaled,
+  def __init__(self, prot, constants, is_scaled,
                share_type):
-    assert isinstance(constant_on_0, AbstractConstant), type(constant_on_0)
-    assert isinstance(constant_on_1, AbstractConstant), type(constant_on_1)
-    assert isinstance(constant_on_2, AbstractConstant), type(constant_on_2)
-    assert constant_on_0.shape == constant_on_1.shape
-    assert constant_on_0.shape == constant_on_2.shape
+    assert all(isinstance(c, AbstractConstant) for c in constants)
+    assert all((c.shape == constants[0].shape) for c in constants)
 
-    super(ABY3Constant, self).__init__(prot, constant_on_0, constant_on_1, constant_on_2,
+    super(ABY3Constant, self).__init__(prot, constants,
                                        is_scaled, share_type)
-    self.constant_on_0 = constant_on_0
-    self.constant_on_1 = constant_on_1
-    self.constant_on_2 = constant_on_2
+    self.constants = constants
 
   def __repr__(self) -> str:
     return "ABY3Constant(shape={}, share_type={})".format(self.shape, self.share_type)
@@ -1641,7 +1630,7 @@ def _reveal_private(prot, x):
     with tf.device(prot.servers[2].device_name):
       z_on_2 = prot._reconstruct(shares, prot.servers[2], x.share_type)
 
-  return ABY3PublicTensor(prot, z_on_0, z_on_1, z_on_2, x.is_scaled, x.share_type)
+  return ABY3PublicTensor(prot, [z_on_0, z_on_1, z_on_2], x.is_scaled, x.share_type)
 
 
 #
@@ -1729,7 +1718,7 @@ def _add_public_public(prot, x, y):
     for i in range(3):
       z[i] = x_shares[i] + y_shares[i]
 
-  return ABY3PublicTensor(prot, z[0], z[1], z[2], x.is_scaled, x.share_type)
+  return ABY3PublicTensor(prot, z, x.is_scaled, x.share_type)
 
 
 #
@@ -1838,7 +1827,7 @@ def _negative_public(prot, x):
       x_on_1_neg = -x_on_1
     with tf.device(prot.servers[2].device_name):
       x_on_2_neg = -x_on_2
-    x_neg = ABY3PublicTensor(prot, x_on_0_neg, x_on_1_neg, x_on_2_neg, x.is_scaled,
+    x_neg = ABY3PublicTensor(prot, [x_on_0_neg, x_on_1_neg, x_on_2_neg], x.is_scaled,
                              x.share_type)
   return x_neg
 
@@ -1989,14 +1978,13 @@ def _mul2_private_private(prot, x, y):
     # Step 3: Reveal (x*y - r) / 2^d
     # xy_minus_r = z0 + z1 + z2
     # xy_minus_r_trunc = xy_minus_r.right_shift(amount)
-    # z = ABY3PublicTensor(prot, xy_minus_r_trunc, xy_minus_r_trunc, xy_minus_r_trunc, True, ARITHMETIC)
+    # z = ABY3PublicTensor(prot, [xy_minus_r_trunc, xy_minus_r_trunc, xy_minus_r_trunc], True, ARITHMETIC)
     xy_minus_r_trunc = [None] * 3
     for i in range(3):
       with tf.device(prot.servers[i].device_name):
         xy_minus_r_trunc[i] = z0 + z1 + z2
         xy_minus_r_trunc[i] = xy_minus_r_trunc[i].right_shift(amount)
-    z = ABY3PublicTensor(prot, xy_minus_r_trunc[0], xy_minus_r_trunc[1],
-                         xy_minus_r_trunc[2], True, ARITHMETIC)
+    z = ABY3PublicTensor(prot, xy_minus_r_trunc, True, ARITHMETIC)
 
     # Step 4: Final addition
     z = z + r_trunc
@@ -3073,7 +3061,7 @@ def _transpose_public(prot, x, perm=None):
     with tf.device(prot.servers[2].device_name):
       x_on_2_t = x_on_2.transpose(perm=perm)
 
-    return ABY3PublicTensor(prot, x_on_0_t, x_on_1_t, x_on_2_t, x.is_scaled, x.share_type)
+    return ABY3PublicTensor(prot, [x_on_0_t, x_on_1_t, x_on_2_t], x.is_scaled, x.share_type)
 
 
 #
@@ -3096,7 +3084,7 @@ def _reduce_sum_public(prot, x, axis=None, keepdims=False):
     with tf.device(prot.servers[2].device_name):
       y_on_2 = x_on_2.reduce_sum(axis, keepdims)
 
-  return ABY3PublicTensor(prot, y_on_0, y_on_1, y_on_2, x.is_scaled, x.share_type)
+  return ABY3PublicTensor(prot, [y_on_0, y_on_1, y_on_2], x.is_scaled, x.share_type)
 
 
 def _reduce_sum_private(prot, x, axis=None, keepdims=False):
@@ -3135,7 +3123,7 @@ def _concat_public(prot, xs, axis):
     with tf.device(prot.servers[2].device_name):
       x_on_2_concat = factory.concat(xs_on_2, axis=axis)
 
-    return ABY3PublicTensor(prot, x_on_0_concat, x_on_1_concat, x_on_2_concat, is_scaled,
+    return ABY3PublicTensor(prot, [x_on_0_concat, x_on_1_concat, x_on_2_concat], is_scaled,
                             xs[0].share_type)
 
 
