@@ -1563,12 +1563,8 @@ class ABY3PrivateTensor(ABY3Tensor):
 
   def __init__(self, prot, shares, is_scaled, share_type):
     assert len(shares) == 3
-    shape = shares[0][0].shape
-    for i in range(len(shares)):
-      for j in range(len(shares[i])):
-        msg = "Shares have different shapes: Expected {}, but share[{}][{}] has {}".format(
-            shape, i, j, shares[i][j].shape)
-        assert shares[i][j].shape == shape, msg
+    assert all((ss.shape == shares[0][0].shape) for s in shares for ss in s), "Shares have different shapes."
+
     super(ABY3PrivateTensor, self).__init__(prot, is_scaled, share_type)
     self.shares = shares
 
