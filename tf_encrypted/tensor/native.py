@@ -432,11 +432,16 @@ def native_factory(NATIVE_TYPE, EXPLICIT_MODULUS=None):  # pylint: disable=inval
       return self.right_shift(bitlength)
 
     def logical_rshift(self, bitlength):
-      # There is some bug in TF when casting from int to uint: the uint result becomes 0. So the following code does not work.
+      # There is some bug in TF when casting from int to uint: the uint result becomes 0.
+      # TF bug report: https://github.com/tensorflow/tensorflow/issues/30215
+      # So the following code does not work.
+      #
       # cast_map = {tf.int8: tf.uint8, tf.int16: tf.uint16,
       #             tf.int32: tf.uint32, tf.int64: tf.uint64}
       # x = tf.bitwise.right_shift(tf.cast(self.value, dtype=cast_map[NATIVE_TYPE]), bitlength)
       # x = tf.cast(x, NATIVE_TYPE)
+      #
+      # Instead, we have to do the following slightly more sophisticated stuff.
       if bitlength < 0:
         raise ValueError("Unsupported shift steps.")
       elif bitlength == 0:

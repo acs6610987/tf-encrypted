@@ -91,6 +91,13 @@ class ABY3(Protocol):
       seed_2 = crypto.secure_seed()
 
     # Replicated keys
+    # NOTE: The following `with` contexts do NOT have any impact for the Python-only operations.
+    #       We use them here only for indicating "which server has which seed".
+    #       In other words, `keys[0][1] = seed_1` only stores the TF graph node `seed_1` in the
+    #       Python list `keys`, but does NOT actually "send" `seed_1` to server 0, which only happens
+    #       when a future TF operation on server 0 uses `keys[0][1]`.
+    # The same NOTE applies to other places where we use Python list to store TF graph nodes in the
+    # `with` context.
     with tf.device(self.servers[0].device_name):
       keys[0][0] = seed_0
       keys[0][1] = seed_1
@@ -104,27 +111,12 @@ class ABY3(Protocol):
     # nonces[0] for server 0 and 1, nonces[1] for server 1 and 2, nonces[2] for server 2 and 0
     nonces = np.array([0, 0, 0], dtype=np.int)
 
-    # TODO: Think about the security: Do we really need PRF for zero sharing?
-    #
-    # According to the discussion here:
-    # https://crypto.stackexchange.com/questions/5333/difference-between-stream-cipher-and-block-cipher
-    # stream ciphers can also be treated as a keyed pseudorandom function family, like block ciphers.
-    # And the underlying C++ implementation of the secure_random.py uses exactly chacha20 stream cipher from
-    # the libsodium library. Therefore, if we can treated stream ciphers as pseudorandom functions, then it
-    # should be fine to directly use G(k + id) to generate the random numbers, where the seed "k + id" is
-    # used as the key of the stream cipher in the C++ code: generators.h
-    #
-    # Otherwise, the absolutely secure way is to implement our own PRF by using block ciphers.
-    # In practice, people normally use stream ciphers for PRG, and use block ciphers for PRF.
-
     return keys, nonces
 
   def setup_b2a_generator(self):
     """
     Initial setup for generating shares during the conversion
     from boolean sharing to arithmetic sharing
-
-    TODO: Think about the security: Do we really need PRF?
     """
 
     if not crypto.supports_seeded_randomness():
@@ -636,9 +628,6 @@ class ABY3(Protocol):
       else:
         raise NotImplementedError("Only arithmetic and boolean sharings are supported.")
 
-    # TODO: (Zico) Think about "graph building" vs "session execution". Are we generating the same zero sharings
-    # TODO: in every session execution? ...NO, because the seeds are actually "Operation" and will be
-    # TODO: fresh random in every session.
     factory = factory or self.int_factory
     with tf.name_scope("zero-sharing"):
       with tf.device(self.servers[0].device_name):
@@ -784,15 +773,11 @@ class ABY3(Protocol):
       with tf.device(helper.device_name):
         w_on_helper = int_factory.sample_seeded_uniform(shape=[2] + m0.shape.as_list(),
                                                         seed=key_on_helper + nonce)
-        # w_c = w_on_helper[0] * (1-c_on_helper.cast(int_factory)) \
-        #       + w_on_helper[1] * c_on_helper.cast(int_factory)
         w_c = int_factory.where(c_on_helper.value,
                                 w_on_helper[1],
                                 w_on_helper[0],
                                 v2=False)
       with tf.device(receiver.device_name):
-        # masked_m_c = masked_m0 * (1-c_on_receiver.cast(int_factory)) \
-        #              + masked_m1 * c_on_receiver.cast(int_factory)
         masked_m_c = int_factory.where(c_on_receiver.value,
                                        masked_m1,
                                        masked_m0,
@@ -1419,9 +1404,6 @@ class ABY3Tensor(abc.ABC):
     :returns: A new ABY3 tensor with the max value from each axis.
     """
     return self.prot.reduce_max(self, axis)
-
-  def consistency_check(self, shares, inst_type):
-    pass
 
   def xor(self, other):
     if self.share_type == BOOLEAN:
@@ -2520,11 +2502,11 @@ def _logical_rshift_private(prot, x, steps):
 
 
 def _B_add_private_private(prot, x, y):
-  pass
+  raise NotImplementedError("Addition with boolean sharing is not implemented, and not recommended.")
 
 
 def _B_sub_private_private(prot, x, y):
-  pass
+  raise NotImplementedError("Sbustraction with boolean sharing is not implemented, and not recommended.")
 
 
 def _B_ppa_private_private(prot, x, y, n_bits, topology="kogge_stone"):
@@ -2559,30 +2541,16 @@ def _B_ppa_sklansky_private_private(prot, x, y, n_bits):
         x.backing_dtype.native_type))
 
   with tf.name_scope("B_ppa"):
-    if prot.nbits == 64:
-      keep_masks = [
-          0x5555555555555555, 0x3333333333333333,
-          0x0f0f0f0f0f0f0f0f, 0x00ff00ff00ff00ff,
-          0x0000ffff0000ffff, 0x00000000ffffffff
-      ]  # yapf: disable
-      copy_masks = [
-          0x5555555555555555, 0x2222222222222222,
-          0x0808080808080808, 0x0080008000800080,
-          0x0000800000008000, 0x0000000080000000
-      ]  # yapf: disable
-    elif prot.nbits == 128:
-      keep_masks = [
-          0x55555555555555555555555555555555, 0x33333333333333333333333333333333,
-          0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f, 0x00ff00ff00ff00ff00ff00ff00ff00ff,
-          0x0000ffff0000ffff0000ffff0000ffff, 0x00000000ffffffff00000000ffffffff,
-          0x0000000000000000ffffffffffffffff
-      ]
-      copy_masks = [
-          0x55555555555555555555555555555555, 0x22222222222222222222222222222222,
-          0x08080808080808080808080808080808, 0x00800080008000800080008000800080,
-          0x00008000000080000000800000008000, 0x00000000800000000000000080000000,
-          0x00000000000000008000000000000000
-      ]
+    keep_masks = [
+        0x5555555555555555, 0x3333333333333333,
+        0x0f0f0f0f0f0f0f0f, 0x00ff00ff00ff00ff,
+        0x0000ffff0000ffff, 0x00000000ffffffff
+    ]  # yapf: disable
+    copy_masks = [
+        0x5555555555555555, 0x2222222222222222,
+        0x0808080808080808, 0x0080008000800080,
+        0x0000800000008000, 0x0000000080000000
+    ]  # yapf: disable
 
     G = x & y
     P = x ^ y
@@ -2605,7 +2573,7 @@ def _B_ppa_sklansky_private_private(prot, x, y, n_bits):
         G1 = (G1 << (2**j)) ^ G1
         P1 = (P1 << (2**j)) ^ P1
       """
-      Two-round impl. using algo. specified in the slides that assume using OR gate is free, but in fact,
+      Two-round impl. using algo. that assume using OR gate is free, but in fact,
       here using OR gate cost one round.
       The PPA operator 'o' is defined as:
       (G, P) o (G1, P1) = (G + P*G1, P*P1), where '+' is OR, '*' is AND
@@ -2717,7 +2685,6 @@ def _A2B_private(prot, x, nbits):
   zero_on_0, zero_on_1, zero_on_2 = zero.unwrapped
   a0, a1, a2 = prot._gen_zero_sharing(x.shape, share_type=BOOLEAN)
 
-  # Method 1: Resist semi-honest adversary
   operand1 = [[None, None], [None, None], [None, None]]
   operand2 = [[None, None], [None, None], [None, None]]
   with tf.name_scope("A2B"):
@@ -2753,8 +2720,6 @@ def _A2B_private(prot, x, nbits):
     # Step 2: Parallel prefix adder that requires log(k) rounds of communication
     result = prot.B_ppa(operand1, operand2, nbits)
 
-  # TODO Method 2: Resist malicious adversary.
-
   return result
 
 
@@ -2776,7 +2741,6 @@ def _bit_extract_private(prot, x, i):
         zero_on_0, zero_on_1, zero_on_2 = zero.unwrapped
         a0, a1, a2 = prot._gen_zero_sharing(x.shape, share_type=BOOLEAN)
 
-        # Method 1: Resist semi-honest adversary
         operand1 = [[None, None], [None, None], [None, None]]
         operand2 = [[None, None], [None, None], [None, None]]
         # Step 1: We know x = ((x0, x1), (x1, x2), (x2, x0))
@@ -2813,15 +2777,10 @@ def _bit_extract_private(prot, x, i):
 
     # Take out the i-th bit
     #
-    # Method 1:
-    # mask = prot.define_constant(np.array([0x1]), apply_scaling=False, share_type=BOOLEAN)
-    # x = x >> i
-    # x = x & mask
-    # # NOTE: Don't use x = x & 0x1. Even though we support automatic lifting of 0x1
-    # # to an ABY3Tensor, but it also includes automatic scaling to make the two operands have
-    # # the same scale, which is not what want here.
+    # NOTE: Don't use x = x & 0x1. Even though we support automatic lifting of 0x1
+    # to an ABY3Tensor, but it also includes automatic scaling to make the two operands have
+    # the same scale, which is not what want here.
     #
-    # Method 2:
     mask = prot.define_constant(np.array([0x1 << i]),
                                 apply_scaling=False,
                                 share_type=BOOLEAN)
@@ -2845,7 +2804,6 @@ def _B2A_private(prot, x, nbits):
   assert isinstance(x, ABY3PrivateTensor), type(x)
   assert x.share_type == BOOLEAN
 
-  # Method 1: Resist semi-honest adversary
   # In semi-honest, the following two calls can be further optimized because we don't
   # need the boolean shares of x1 and x2. We only need their original values on intended servers.
   x1_on_0, x1_on_1, x1_on_2, x1_shares = prot._gen_b2a_sharing(x.shape, prot.b2a_keys_1)
@@ -2950,14 +2908,6 @@ def __mul_AB_routine(prot, a, b, sender_idx):
     idx1 = (sender_idx + 1) % 3
     idx2 = (sender_idx + 2) % 3
     with tf.device(prot.servers[idx0].device_name):
-      # TODO: Think about the security:
-      # "z[idx0][0] = s[idx2]" doesn't make z[idx0][0] a Tensor on servers[idx0], it is just a reference to
-      # s[idx2] which is still on servers[idx2] (just print out z[idx0][0]'s device will verify this).
-      # Consider later in some code, if we use z[idx0][0], then servers[idx2] will send the value
-      # (actually only happens when we reconstruct on servers[idx1]),
-      # but not servers[idx0], which essentially means, the value is never sent from servers[idx2] to
-      # servers[idx0]. Will this lead to any vulnerability? If not, then this saves some communication
-      # cost, and gives us another reason to use TensorFlow.
       z[idx0][0] = s[idx2]
       z[idx0][1] = s[idx1]
       tmp = (b_shares[idx0][0] ^ b_shares[idx0][1]).cast(a.factory) * a
@@ -3238,10 +3188,7 @@ def _write_private(prot, x, filename_prefix):
 
 def _read_(prot, filename_prefix, batch_size, n_columns):
 
-  if prot.nbits == 64:
-    row_shape = [n_columns]
-  elif prot.nbits == 128:
-    row_shape = [n_columns, 2]
+  row_shape = [n_columns]
 
   def decode(line):
     fields = tf.string_split([line], ",").values
@@ -3298,8 +3245,7 @@ def _iterate_private(
 
         dataset = dataset.batch(batch_size)
 
-        # TODO (juhou): initializable_iterator needs to run initializer.
-        # See how to switch to make_one_shot_iterator.
+        # NOTE: initializable_iterator needs to run initializer.
         iterators[idx][i] = tf.compat.v1.data.make_initializable_iterator(dataset)
         batch = iterators[idx][i].get_next()
         # Wrap the tf.tensor as a dense tensor (no extra encoding is needed)

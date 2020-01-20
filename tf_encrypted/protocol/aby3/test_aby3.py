@@ -319,44 +319,29 @@ def test_not_private():
     print("test_not_private succeeds")
 
 
-def test_native_ppa_sklansky(nbits=128):
+def test_native_ppa_sklansky():
   from math import log2
   from random import randint
   n = 10
   while n > 0:
     n = n - 1
 
-    if nbits == 64:
-      x = randint(1, 2**31)
-      y = randint(1, 2**31)
-      keep_masks = [
-          0x5555555555555555, 0x3333333333333333,
-          0x0f0f0f0f0f0f0f0f, 0x00ff00ff00ff00ff,
-          0x0000ffff0000ffff, 0x00000000ffffffff
-      ] # yapf: disable
-      copy_masks = [
-          0x5555555555555555, 0x2222222222222222,
-          0x0808080808080808, 0x0080008000800080,
-          0x0000800000008000, 0x0000000080000000
-      ] # yapf: disable
-    elif nbits == 128:
-      x = randint(1, 2**125)
-      y = randint(1, 2**125)
-      keep_masks = [
-          0x55555555555555555555555555555555, 0x33333333333333333333333333333333,
-          0x0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f, 0x00ff00ff00ff00ff00ff00ff00ff00ff,
-          0x0000ffff0000ffff0000ffff0000ffff, 0x00000000ffffffff00000000ffffffff,
-          0x0000000000000000ffffffffffffffff
-      ]
-      copy_masks = [
-          0x55555555555555555555555555555555, 0x22222222222222222222222222222222,
-          0x08080808080808080808080808080808, 0x00800080008000800080008000800080,
-          0x00008000000080000000800000008000, 0x00000000800000000000000080000000,
-          0x00000000000000008000000000000000
-      ]
+    x = randint(1, 2**31)
+    y = randint(1, 2**31)
+    keep_masks = [
+            0x5555555555555555, 0x3333333333333333,
+            0x0f0f0f0f0f0f0f0f, 0x00ff00ff00ff00ff,
+            0x0000ffff0000ffff, 0x00000000ffffffff
+    ] # yapf: disable
+    copy_masks = [
+            0x5555555555555555, 0x2222222222222222,
+            0x0808080808080808, 0x0080008000800080,
+            0x0000800000008000, 0x0000000080000000
+    ] # yapf: disable
+
     G = x & y
     P = x ^ y
-    k = nbits
+    k = 64
     for i in range(int(log2(k))):
       c_mask = copy_masks[i]
       k_mask = keep_masks[i]
@@ -1060,7 +1045,7 @@ if __name__ == "__main__":
     test_3d_matmul_private()
     test_boolean_sharing()
     test_not_private()
-    test_native_ppa_sklansky(nbits=64)
+    test_native_ppa_sklansky()
     test_native_ppa_kogge_stone()
     test_lshift_private()
     test_rshift_private()

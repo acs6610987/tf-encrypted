@@ -47,6 +47,10 @@ class LogisticRegression:
         for batch in range(num_batches):
             sess.run(fit_batch_op, tag="fit-batch")
 
+    """
+    Revealing and printing loss in the middle of training should only be used for debugging.
+    It might leak information in a normal run.
+    """
     def loss(self, sess, x, y, player_name):
         def print_loss(y_hat, y):
             with tf.name_scope("print-loss"):
