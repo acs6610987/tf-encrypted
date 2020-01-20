@@ -1065,5 +1065,6 @@ if __name__ == "__main__":
     test_simple_lr_model()
     test_mul_trunc2_private_private()
     test_error()
+    test_read_private()
 
   test_arithmetic_boolean()

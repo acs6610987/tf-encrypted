@@ -3197,7 +3197,7 @@ def _read_(prot, filename_prefix, batch_size, n_columns):
         it = data.make_one_shot_iterator()
         batch[i][j] = it.get_next()
         batch[i][j] = tf.reshape(batch[i][j], [batch_size] + row_shape)
-        batch[i][j] = prot.int_factory.convert_to_dense_tensor(batch[i][j])
+        batch[i][j] = prot.int_factory.tensor(batch[i][j])
 
   return ABY3PrivateTensor(prot, batch, True, ARITHMETIC)
 
@@ -3239,7 +3239,7 @@ def _iterate_private(
         iterators[idx][i] = tf.compat.v1.data.make_initializable_iterator(dataset)
         batch = iterators[idx][i].get_next()
         # Wrap the tf.tensor as a dense tensor (no extra encoding is needed)
-        results[idx][i] = prot.int_factory.convert_to_dense_tensor(
+        results[idx][i] = prot.int_factory.tensor(
             tf.reshape(batch, out_shape))
 
       prot.add_initializers(*[iterators[idx][i].initializer for i in range(2)])
@@ -3250,10 +3250,8 @@ def _iterate_private(
   # Synchronize the reading of all 6 dataset iterators
   with tf.control_dependencies([share.value for result in results for share in result]):
     for i in range(3):
-      results[i][0] = prot.int_factory.convert_to_dense_tensor(
-          tf.identity(results[i][0].value))
-      results[i][1] = prot.int_factory.convert_to_dense_tensor(
-          tf.identity(results[i][1].value))
+      results[i][0] = results[i][0].identity()
+      results[i][1] = results[i][1].identity()
 
   return ABY3PrivateTensor(prot, results, tensor.is_scaled, tensor.share_type)
 
